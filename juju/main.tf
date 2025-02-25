@@ -60,5 +60,21 @@ resource "juju_kubernetes_cloud" "microk8s-cloud" {
   name  = "microk8s-cloud"
   kubernetes_config = file("~/.kube/config")
 }
+/* 
+resource "terraform_data" "juju_add_k8s" {
+
+  provisioner "local-exec" {
+    command    = "juju add-k8s ${var.k8s_cluster_name} --client"
+    on_failure = continue
+  }
+  depends_on = [terraform_data.get_kube_config]
+
+  provisioner "local-exec" {
+    when       = destroy
+    command    = "rm ~/.kube/config"
+    on_failure = continue
+  }
+} */
+
 
 #resource ""

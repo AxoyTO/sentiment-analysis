@@ -105,18 +105,3 @@ resource "terraform_data" "get_kube_config" {
   }
   depends_on = [azurerm_kubernetes_cluster.aks]
 }
-
-resource "terraform_data" "juju_add_k8s" {
-
-  provisioner "local-exec" {
-    command    = "juju add-k8s ${var.k8s_cluster_name} --client"
-    on_failure = continue
-  }
-  depends_on = [terraform_data.get_kube_config]
-
-  provisioner "local-exec" {
-    when       = destroy
-    command    = "rm ~/.kube/config"
-    on_failure = continue
-  }
-}
