@@ -56,8 +56,8 @@ jobs:
         uses: actions/cache@v3
         with:
           path: |
-            aks/.terraform
-            aks/.terraform.lock.hcl
+            .terraform
+            .terraform.lock.hcl
           key: ${{ runner.os }}-terraform-${{ hashFiles('aks/.terraform.lock.hcl') }}
           restore-keys: |
             ${{ runner.os }}-terraform-
@@ -75,7 +75,13 @@ jobs:
         working-directory: aks/
 
       - name: Terraform Apply
+        id: terraformApply
         run: terraform apply tfplan
+        working-directory: aks/
+
+      - name: Terraform Rollback
+        if: failure() && steps.terraformApply.outcome == 'failure'
+        run: terraform destroy -auto-approve
         working-directory: aks/
 #   deploy-k8s:
 #     name: Deploy Kubernetes Workloads
