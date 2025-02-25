@@ -1,0 +1,11 @@
+# Virtual environments
+venv
+
+# Cache
+__pycache__
+
+
+# Terraform
+tf.rc
+*.tfstate*
+.terraform*
