@@ -26,6 +26,10 @@ env:
   AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
   DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   terraform:
     name: Deploy AKS with Terraform
