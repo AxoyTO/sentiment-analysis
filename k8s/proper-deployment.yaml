@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: proper-model
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: proper-model
+  template:
+    metadata:
+      labels:
+        app: proper-model
+    spec:
+      containers:
+      - name: proper-model
+        image: axoy/sentiment-analysis-proper_model:latest
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "512Mi"
+          limits:
+            cpu: "500m"
+            memory: "1Gi"
+        ports:
+        - containerPort: 8000
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 3
+          periodSeconds: 5

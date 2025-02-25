@@ -1,0 +1,61 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: failover-job
+spec:
+  template:
+    spec:
+      serviceAccountName: failover-sa
+      restartPolicy: Never
+      containers:
+      - name: failover
+        image: bitnami/kubectl
+        command:
+        - /bin/sh
+        - -c
+        - |
+          CURRENT_TARGET=""
+          while true; do
+            if [ $(kubectl get pods -l app=proper-model 2> /dev/null | grep Running | wc -l) -ge 1 ] && \
+               [ $(kubectl get pods -l app=proper-model | grep Running | awk '{print $2}' | grep 0 | wc -l) -eq 0 ]; then
+              NEW_TARGET="proper-model"
+            else
+              NEW_TARGET="fallback-model"
+            fi
+            
+            CURRENT_SELECTOR=$(kubectl get service sentiment-lb -o=jsonpath='{.spec.selector.app}')
+            
+            if [ "$CURRENT_SELECTOR" != "$NEW_TARGET" ]; then
+              echo "$(date '+%d/%m/%Y %H:%M:%S') —— Traffic switching: $CURRENT_SELECTOR -> $NEW_TARGET"
+              kubectl patch service sentiment-lb -p "{\"spec\":{\"selector\":{\"app\":\"$NEW_TARGET\"}}}"
+            fi
+            
+            sleep 10
+          done
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: failover-sa
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: failover-role
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services"]
+  verbs: ["get", "list", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: failover-rolebinding
+subjects:
+- kind: ServiceAccount
+  name: failover-sa
+  namespace: default
+roleRef:
+  kind: Role
+  name: failover-role
+  apiGroup: rbac.authorization.k8s.io
