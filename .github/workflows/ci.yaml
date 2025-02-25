@@ -25,6 +25,7 @@ env:
   AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
   AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
   DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+  TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
 permissions:
   id-token: write
@@ -45,15 +46,21 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
 
-      - name: Set TF Variables
-        run: 'export TF_VAR_subscription_id="${{ secrets.AZURE_SUBSCRIPTION_ID }}"'
-        shell: bash
-
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: ${{ env.TF_VERSION }}
           # cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Cache Terraform Providers & Plugins
+        uses: actions/cache@v3
+        with:
+          path: |
+            aks/.terraform
+            aks/.terraform.lock.hcl
+          key: ${{ runner.os }}-terraform-${{ hashFiles('aks/.terraform.lock.hcl') }}
+          restore-keys: |
+            ${{ runner.os }}-terraform-
 
       - name: Terraform Init
         run: terraform init
