@@ -53,11 +53,11 @@ jobs:
           # cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
 
       - name: Cache Terraform Providers & Plugins
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
-            .terraform
-            .terraform.lock.hcl
+            aks/.terraform
+            aks/.terraform.lock.hcl
           key: ${{ runner.os }}-terraform-${{ hashFiles('aks/.terraform.lock.hcl') }}
           restore-keys: |
             ${{ runner.os }}-terraform-
