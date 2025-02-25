@@ -1,0 +1,110 @@
+name: ci-workflow
+run-name: ${{ github.actor }} Sentiment Analysis GitHub Actions
+
+on:
+  push:
+    paths:
+      - "**.py"
+      - "**.tf*"
+      - "**.yaml"
+      - "**.yml"
+    branches:
+      - main
+  pull_request:
+    paths:
+      - "**.py"
+      - "**.tf*"
+      - "**.yaml"
+      - "**.yml"
+    branches:
+      - main
+
+env:
+  TF_VERSION: "1.10.5"
+  AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+  AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+jobs:
+  terraform:
+    name: Deploy AKS with Terraform
+    runs-on: ubuntu-latest
+    steps:
+      - name: Azure Login action
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          # cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Plan
+        run: terraform plan -out=tfplan
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve
+#   deploy-k8s:
+#     name: Deploy Kubernetes Workloads
+#     runs-on: ubuntu-latest
+#     needs: terraform
+#     steps:
+#       - name: Checkout Repository
+#         uses: actions/checkout@v3
+
+#       - name: Login to Azure
+#         run: |
+#           az login --service-principal -u ${{ secrets.AZURE_CLIENT_ID }} -p ${{ env.AZURE_CLIENT_SECRET }} --tenant ${{ env.AZURE_TENANT_ID }}
+#           az account set --subscription ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+#       - name: Get AKS Credentials
+#         run: az aks get-credentials --resource-group ${{ vars.RESOURCE_GROUP }} --name ${{ vars.AKS_NAME }} --overwrite-existing
+
+#       - name: Apply Kubernetes Manifests
+#         run: |
+#           kubectl apply -f proper-deployment.yaml
+#           kubectl apply -f fallback-deployment.yaml
+#           kubectl apply -f proper-service.yaml
+#           kubectl apply -f fallback-service.yaml
+#           kubectl apply -f failover-lb.yaml
+#           kubectl apply -f failover-sa.yaml
+#           kubectl apply -f failover-rbac.yaml
+#           kubectl apply -f failover-job.yaml
+
+#       - name: Verify Kubernetes Deployment
+#         run: |
+#           kubectl get nodes
+#           kubectl get pods
+#           kubectl get services
+
+#   docker-build-push:
+#     name: Build & Push Docker Images
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: Checkout Repository
+#         uses: actions/checkout@v3
+
+#       - name: Login to DockerHub
+#         run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ vars.DOCKERHUB_USERNAME }}" --password-stdin
+
+#       - name: Build & Push `proper_model`
+#         run: |
+#           docker build -t axoy/sentiment-analysis-proper_model:latest ./proper_model
+#           docker push axoy/sentiment-analysis-proper_model:latest
+
+#       - name: Build & Push `fallback_model`
+#         run: |
+#           docker build -t axoy/sentiment-analysis-fallback_model:latest ./fallback_model
+#           docker push axoy/sentiment-analysis-fallback_model:latest
