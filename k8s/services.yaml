@@ -1,0 +1,51 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: proper-model
+spec:
+  selector:
+    app: proper-model
+  ports:
+    - protocol: TCP
+      port: 8000
+      targetPort: 8000
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fallback-model
+spec:
+  selector:
+    app: fallback-model
+  ports:
+    - protocol: TCP
+      port: 8000
+      targetPort: 8000
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sentiment-lb
+spec:
+  type: ClusterIP  
+  selector:
+    app: proper-model
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-ui
+spec:
+  type: LoadBalancer
+  selector:
+    app: web-ui
+  ports:
+    - port: 80
+      targetPort: 80
+
