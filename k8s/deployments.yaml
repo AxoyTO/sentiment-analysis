@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: proper-model
-        image: axoy/sentiment-analysis-proper_model:latest
+        image: axoy/sentiment-analysis-proper-model:cors-middleware
         resources:
           requests:
             cpu: "200m"
@@ -76,7 +76,8 @@ spec:
     spec:
       containers:
         - name: web-ui
-          image: axoy/sentiment-web-ui:latest
+          image: axoy/sentiment-web-ui:nginx
+          imagePullPolicy: Always
           resources:
             requests:
               cpu: "200m"

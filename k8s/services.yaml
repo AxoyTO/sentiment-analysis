@@ -42,7 +42,7 @@ kind: Service
 metadata:
   name: web-ui
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   selector:
     app: web-ui
   ports:
