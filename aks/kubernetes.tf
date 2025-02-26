@@ -1,4 +1,5 @@
 resource "kubernetes_deployment" "proper_model" {
+  depends_on = [terraform_data.get_kube_config]
   metadata {
     name = "proper-model"
     labels = {
@@ -23,7 +24,7 @@ resource "kubernetes_deployment" "proper_model" {
 
       spec {
         container {
-          image = "axoy/sentiment-analysis-proper_model:latest"
+          image = "axoy/sentiment-analysis-proper-model:cors-middleware"
           name  = "proper-model"
 
           resources {
@@ -61,6 +62,7 @@ resource "kubernetes_deployment" "proper_model" {
 }
 
 resource "kubernetes_deployment" "fallback_model" {
+  depends_on = [terraform_data.get_kube_config]
   metadata {
     name = "fallback-model"
     labels = {
@@ -108,8 +110,58 @@ resource "kubernetes_deployment" "fallback_model" {
   }
 }
 
+resource "kubernetes_deployment" "web-ui" {
+  depends_on = [terraform_data.get_kube_config]
+  metadata {
+    name = "web-ui"
+    labels = {
+      app = "web-ui"
+    }
+  }
+  spec {
+    replicas = 1
+
+    selector {
+      match_labels = {
+        app = "web-ui"
+      }
+    }
+
+    template {
+      metadata {
+        labels = {
+          app = "web-ui"
+        }
+      }
+
+      spec {
+        container {
+          image = "axoy/sentiment-web-ui:latest"
+          image_pull_policy = "Always"
+          name  = "web-ui"
+
+          resources {
+            limits = {
+              cpu    = "500m"
+              memory = "256Mi"
+            }
+            requests = {
+              cpu    = "200m"
+              memory = "128Mi"
+            }
+          }
+
+          port {
+            container_port = 80
+          }
+        }
+      }
+    }
+  }
+}
 
 resource "kubernetes_service" "proper-model" {
+  depends_on = [terraform_data.get_kube_config]
   metadata {
     name = "proper-model"
   }
@@ -119,16 +171,16 @@ resource "kubernetes_service" "proper-model" {
     }
     port {
       protocol    = "TCP"
-      port        = 80
+      port        = 8000
       target_port = 8000
     }
 
-    type                    = "LoadBalancer"
-    external_traffic_policy = "Cluster"
+    type = "ClusterIP"
   }
 }
 
 resource "kubernetes_service" "fallback-model" {
+  depends_on = [terraform_data.get_kube_config]
   metadata {
     name = "fallback-model"
   }
@@ -138,7 +190,7 @@ resource "kubernetes_service" "fallback-model" {
     }
     port {
       protocol    = "TCP"
-      port        = 80
+      port        = 8000
       target_port = 8000
     }
 
@@ -148,6 +200,7 @@ resource "kubernetes_service" "fallback-model" {
 
 
 resource "kubernetes_service" "sentiment-lb" {
+  depends_on = [terraform_data.get_kube_config]
   metadata {
     name = "sentiment-lb"
   }
@@ -161,18 +214,38 @@ resource "kubernetes_service" "sentiment-lb" {
       target_port = 8000
     }
 
-    type                    = "LoadBalancer"
-    external_traffic_policy = "Cluster"
+    type = "ClusterIP"
+  }
+}
+
+resource "kubernetes_service" "web-ui" {
+  depends_on = [terraform_data.get_kube_config]
+  metadata {
+    name = "web-ui"
+  }
+  spec {
+    selector = {
+      app = kubernetes_deployment.web-ui.metadata.0.labels.app
+    }
+    port {
+      protocol    = "TCP"
+      port        = 80
+      target_port = 80
+    }
+
+    type = "ClusterIP"
   }
 }
 
 resource "kubernetes_service_account" "failover" {
+  depends_on = [terraform_data.get_kube_config]
   metadata {
     name = "failover-sa"
   }
 }
 
 resource "kubernetes_role" "failover" {
+  depends_on = [terraform_data.get_kube_config]
   metadata {
     name = "failover-role"
   }
@@ -185,6 +258,7 @@ resource "kubernetes_role" "failover" {
 }
 
 resource "kubernetes_role_binding" "failover" {
+  depends_on = [terraform_data.get_kube_config]
   metadata {
     name      = "failover-rolebinding"
     namespace = "default"
@@ -228,6 +302,7 @@ locals {
 
 
 resource "kubernetes_job" "failover" {
+  depends_on = [terraform_data.get_kube_config]
   metadata {
     name = "failover-job"
   }
@@ -250,4 +325,46 @@ resource "kubernetes_job" "failover" {
     }
   }
   wait_for_completion = false
+}
+
+
+resource "terraform_data" "nginx-ingress" {
+  depends_on = [terraform_data.get_kube_config]
+  provisioner "local-exec" {
+    command = "kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/cloud/deploy.yaml"
+  }
+}
+
+resource "kubernetes_ingress" "web-ui-ingress" {
+  depends_on             = [terraform_data.nginx-ingress]
+  wait_for_load_balancer = true
+  metadata {
+    name = "web-ui-ingress"
+    annotations = {
+      "nginx.ingress.kubernetes.io/cors-allow-origin" : "*",
+      "nginx.ingress.kubernetes.io/cors-allow-methods" : "GET, POST, OPTIONS",
+      "nginx.ingress.kubernetes.io/cors-allow-headers" : "Content-Type"
+    }
+  }
+  spec {
+    rule {
+      http {
+        path {
+          path = "/"
+          backend {
+            service_name = kubernetes_service.web-ui.metadata.0.name
+            service_port = 80
+          }
+        }
+
+        path {
+          path = "/predict"
+          backend {
+            service_name = kubernetes_service.sentiment-lb.metadata.0.name
+            service_port = 80
+          }
+        }
+      }
+    }
+  }
 }

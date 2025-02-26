@@ -54,7 +54,15 @@ output "kube_config" {
   sensitive   = true
 }
 
-output "sentiment-lb-ip" {
-  value       = kubernetes_service.sentiment-lb.status.0.load_balancer.0.ingress.0.ip
-  description = "value of the sentiment-lb service IP"
+/* output "web-ui-ip" {
+  value       = kubernetes_service.web-ui.status.0.load_balancer.0.ingress.0.ip
+  description = "value of the web-ui service IP"
+} */
+
+output "load_balancer_hostname" {
+  value = kubernetes_ingress.web-ui-ingress.status.0.load_balancer.0.ingress.0.hostname
+}
+
+output "load_balancer_ip" {
+  value = kubernetes_ingress.web-ui-ingress.status.0.load_balancer.0.ingress.0.ip
 }
