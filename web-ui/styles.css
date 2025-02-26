@@ -1,0 +1,142 @@
+/* Default Light Mode */
+:root {
+    --bg-color: #f5f5f5;
+    --container-bg: white;
+    --text-color: #222;
+    --input-bg: white;
+    --input-border: #ccc;
+    --button-bg: #007bff;
+    --button-hover: #0056b3;
+    --result-text: black;
+}
+
+/* Dark Mode Variables */
+.dark-mode {
+    --bg-color: #1e1e1e;
+    --container-bg: #2c2c2c;
+    --text-color: #f0f0f0;
+    --input-bg: #3a3a3a;
+    --input-border: #555;
+    --button-bg: #1a73e8;
+    --button-hover: #0d47a1;
+    --result-text: white;
+}
+
+/* Apply Theme Colors */
+body {
+    font-family: "Arial", sans-serif;
+    background: var(--bg-color);
+    color: var(--text-color);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    flex-direction: column;
+    margin: 0;
+    transition: background 0.3s ease-in-out, color 0.3s ease-in-out;
+}
+
+/* ✅ Fix: Small Dark Mode Button */
+#dark-mode-toggle {
+    background: var(--button-bg);
+    border: none;
+    color: white;
+    padding: 6px 10px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: bold;
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: background 0.2s ease-in-out;
+}
+
+#dark-mode-toggle:hover {
+    background: var(--button-hover);
+}
+
+/* ✅ Container Styling */
+.container {
+    background: var(--container-bg);
+    padding: 25px;
+    border-radius: 12px;
+    box-shadow: 0px 6px 15px rgba(0, 0, 0, 0.1);
+    width: 400px;
+    text-align: center;
+    transition: 0.3s ease-in-out;
+    position: relative;
+    /* Ensures dark mode toggle is positioned relative to it */
+}
+
+/* ✅ Input Box Fix */
+textarea {
+    width: 100%;
+    height: 100px;
+    margin-top: 10px;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid var(--input-border);
+    background: var(--input-bg);
+    color: var(--text-color);
+    font-size: 16px;
+    resize: none;
+    outline: none;
+    transition: 0.2s ease-in-out;
+    box-sizing: border-box;
+}
+
+textarea:focus {
+    border-color: var(--button-bg);
+    box-shadow: 0px 0px 5px rgba(0, 123, 255, 0.5);
+}
+
+/* ✅ Analyze Button */
+button {
+    background: var(--button-bg);
+    color: white;
+    border: none;
+    padding: 12px;
+    width: 100%;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: bold;
+    margin-top: 10px;
+    transition: 0.2s ease-in-out;
+}
+
+button:hover {
+    background: var(--button-hover);
+    transform: translateY(-2px);
+    box-shadow: 0px 4px 10px rgba(0, 91, 187, 0.3);
+}
+
+/* ✅ Loading & Result Text */
+#loading {
+    margin-top: 10px;
+    font-weight: bold;
+    color: #ff9800;
+    display: none;
+}
+
+#result {
+    margin-top: 15px;
+    font-size: 18px;
+    font-weight: bold;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    color: var(--result-text);
+}
+
+#result span {
+    font-size: 22px;
+    font-weight: bold;
+    margin-top: 5px;
+}
