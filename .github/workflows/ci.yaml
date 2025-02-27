@@ -118,7 +118,6 @@ jobs:
             ${{ runner.os }}-terraform-
 
       - name: Terraform Init
-        if: env.aks_found == '0'
         run: terraform init
         working-directory: aks/
 
@@ -127,18 +126,15 @@ jobs:
         working-directory: aks/
 
       - name: Terraform Validate
-        if: env.aks_found == '0'
         run: terraform validate
         working-directory: aks/
 
       - name: Terraform Plan
-        if: env.aks_found == '0'
         run: terraform plan -out=tfplan
         working-directory: aks/
 
       - name: Terraform Apply
         id: terraformApply
-        if: env.aks_found == '0'
         run: terraform apply tfplan
         working-directory: aks/
 
@@ -148,7 +144,6 @@ jobs:
         working-directory: aks/
 
       - name: Terraform Not Needed
-        if: env.aks_found == '1'
         run: echo "AKS already exists, skipping Terraform steps."
 
       - name: Upload Terraform Artifacts
@@ -161,7 +156,8 @@ jobs:
   get_ingress_ip:
     name: Extract Ingress IP
     runs-on: ubuntu-latest
-    needs: deploy_aks
+    needs:
+      - check_aks
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v3
