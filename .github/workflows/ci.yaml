@@ -216,7 +216,7 @@ jobs:
       - name: Test Root Path
         run: |
           echo "Probing root path..."
-          curl -v http://${{ env.INGRESS_IP }}/
+          curl -v http://${{ needs.get_ingress_ip.outputs.INGRESS_IP }}/
 
   test_proper_model:
     name: Test Proper Model
