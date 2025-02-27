@@ -1,0 +1,317 @@
+name: ci-workflow
+run-name: ${{ github.actor }} Sentiment Analysis GitHub Actions
+
+on:
+  push:
+    paths:
+      - "**.py"
+      - "**.tf*"
+      - "**.yaml"
+      - "**.yml"
+    branches:
+      - main
+  pull_request:
+    paths:
+      - "**.py"
+      - "**.tf*"
+      - "**.yaml"
+      - "**.yml"
+    branches:
+      - main
+
+env:
+  TF_VERSION: "1.10.5"
+  AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+  AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+  DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+  TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build_and_push_docker_images:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to DockerHub
+        run: echo "${{ env.DOCKERHUB_TOKEN }}" | docker login -u "${{ env.DOCKERHUB_USERNAME }}" --password-stdin
+
+      - name: Build & Push Proper Model (cors-middleware)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./proper_model
+          push: true
+          tags: ${{ env.DOCKERHUB_USERNAME }}/sentiment-analysis-proper-model:cors-middleware
+          cache-from: type=gha,scope=proper-model
+          cache-to: type=gha,scope=proper-model,mode=max
+
+      - name: Build & Push Fallback Model (cors-middleware)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./fallback_model
+          push: true
+          tags: ${{ env.DOCKERHUB_USERNAME }}/sentiment-analysis-fallback-model:cors-middleware
+          cache-from: type=gha,scope=fallback-model
+          cache-to: type=gha,scope=fallback-model,mode=max
+
+      - name: Build & Push Web-UI (nginx)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./web-ui
+          push: true
+          tags: ${{ env.DOCKERHUB_USERNAME }}/sentiment-web-ui:nginx
+          cache-from: type=gha,scope=web-ui
+          cache-to: type=gha,scope=web-ui,mode=max
+
+  check_aks:
+    name: Check if AKS Already Exists
+    runs-on: ubuntu-latest
+    outputs:
+      aks_found: ${{ steps.checkAks.outputs.aks_found }}
+    steps:
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Check if AKS is Deployed
+        id: checkAks
+        run: |
+          set +e
+          az aks show --resource-group aks-resource-group --name mds-aks 2>&1
+          if [ $? -eq 0 ]; then
+            echo "aks_found=true" >> $GITHUB_OUTPUT
+          else
+            echo "aks_found=false" >> $GITHUB_OUTPUT
+          fi
+          set -e
+
+  deploy_aks:
+    name: Deploy AKS with Terraform
+    runs-on: ubuntu-latest
+    needs:
+      - build_and_push_docker_images
+      - check_aks
+    if: needs.check_aks.outputs.aks_found == 'false'
+    steps:
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          # cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Cache Terraform Providers & Plugins
+        uses: actions/cache@v4
+        with:
+          path: |
+            aks/.terraform
+            aks/.terraform.lock.hcl
+          key: ${{ runner.os }}-terraform-${{ hashFiles('aks/.terraform.lock.hcl') }}
+          restore-keys: |
+            ${{ runner.os }}-terraform-
+
+      - name: Terraform Init
+        run: terraform init
+        working-directory: aks/
+
+      - name: Terraform Format
+        run: terraform fmt
+        working-directory: aks/
+
+      - name: Terraform Validate
+        run: terraform validate
+        working-directory: aks/
+
+      - name: Terraform Plan
+        run: terraform plan -out=tfplan
+        working-directory: aks/
+
+      - name: Terraform Apply
+        id: terraformApply
+        run: terraform apply tfplan
+        working-directory: aks/
+
+      - name: Terraform Rollback
+        if: failure() && steps.terraformApply.outcome == 'failure'
+        run: terraform destroy -auto-approve
+        working-directory: aks/
+
+      - name: Terraform Not Needed
+        run: echo "AKS already exists, skipping Terraform steps."
+
+      - name: Upload Terraform Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-artifacts
+          path: |
+            aks/tfplan
+
+  get_ingress_ip:
+    name: Extract Ingress IP
+    runs-on: ubuntu-latest
+    needs:
+      - check_aks
+      - deploy_aks
+    if: always()
+    outputs:
+      INGRESS_IP: ${{ steps.ingressip.outputs.INGRESS_IP }}
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Get AKS Credentials
+        run: az aks get-credentials --resource-group aks-resource-group --name mds-aks --overwrite-existing
+
+      - name: Wait for Ingress to have an address
+        run: |
+          MAX_WAIT=120
+          COUNTER=0
+          INGRESS_NAME="web-ui-ingress"
+          NAMESPACE="default"
+
+          echo "Waiting up to $MAX_WAIT seconds for Ingress '$INGRESS_NAME' to get an address..."
+
+          while [[ $COUNTER -lt $MAX_WAIT ]]; do
+            ADDRESS=$(kubectl get ingress $INGRESS_NAME -n $NAMESPACE -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
+
+            if [[ -n "$ADDRESS" ]]; then
+              echo "Ingress has an address: $ADDRESS"
+              exit 0
+            fi
+
+            sleep 1
+            ((COUNTER++))
+          done
+
+          echo "ERROR: Ingress never got an address within $MAX_WAIT seconds"
+          exit 1
+
+      - name: Extract Ingress IP
+        id: ingressip
+        run: |
+          IP=$(kubectl get ingress web-ui-ingress -n default -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          echo "Detected IP: $IP"
+          echo "INGRESS_IP=$IP" >> $GITHUB_OUTPUT
+        shell: bash
+
+  test_ingress:
+    name: Test Ingress (Root & /predict)
+    runs-on: ubuntu-latest
+    needs: get_ingress_ip
+    if: always()
+    steps:
+      - name: Echo Ingress IP
+        run: echo "Ingress IP is $INGRESS_IP"
+
+      - name: Test Root Path
+        run: |
+          echo "Probing root path..."
+          curl -v http://${{ needs.get_ingress_ip.outputs.INGRESS_IP }}/
+
+  test_proper_model:
+    name: Test Proper Model
+    runs-on: ubuntu-latest
+    needs:
+      - test_ingress
+      - get_ingress_ip
+    if: always()
+    steps:
+      - name: Test Predict Endpoint (Proper Model)
+        run: |
+          echo "Testing /predict"
+          curl -X POST \
+            -H "Content-Type: application/json" \
+            -d '{"text":"I love this product!"}' \
+            -v http://${{ needs.get_ingress_ip.outputs.INGRESS_IP }}/predict
+
+  test_failover:
+    name: Simulate Failover to Fallback
+    runs-on: ubuntu-latest
+    needs:
+      - test_ingress
+      - get_ingress_ip
+    if: always()
+    steps:
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Get AKS Credentials
+        run: az aks get-credentials --resource-group aks-resource-group --name mds-aks --overwrite-existing
+
+      - name: Scale Down Proper Model
+        run: |
+          kubectl scale deployment proper-model --replicas=0
+          kubectl rollout status deployment/fallback-model --timeout=60s
+
+      - name: Test Predict Endpoint (Fallback Model)
+        run: |
+          echo "Testing /predict after failover"
+          curl -X POST \
+            -H "Content-Type: application/json" \
+            -d '{"text":"Now we test fallback!"}' \
+            -v http://${{ needs.get_ingress_ip.outputs.INGRESS_IP }}/predict
+
+      - name: Scale Up Proper Model
+        run: |
+          kubectl scale deployment proper-model --replicas=1
+          kubectl rollout status deployment/proper-model --timeout=60s
+
+  destroy_aks:
+    name: Destroy AKS
+    runs-on: ubuntu-latest
+    needs:
+      - test_failover
+      - test_proper_model
+      - deploy_aks
+    if: needs.deploy_aks.result == 'success'
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Remove Resource Groups
+        run: |
+          echo "Deleting resource group 'MC_aks-resource-group_mds-aks_germanywestcentral'..."
+          az group delete --name MC_aks-resource-group_mds-aks_germanywestcentral --yes
+          echo "Deleting resource group 'aks-resource-group'..."
+          az group delete --name aks-resource-group --yes
+          echo "Resource groups deletion triggered."

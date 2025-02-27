@@ -1,0 +1,16 @@
+services:
+  proper_model:
+    build:
+      context: ./proper_model
+    ports:
+      - "8000:8000"
+    restart: always
+
+  fallback_model:
+    build:
+      context: ./fallback_model
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./fallback_model/data:/app/data
+    restart: always

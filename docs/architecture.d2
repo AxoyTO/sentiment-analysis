@@ -1,0 +1,116 @@
+vars: {
+  d2-config: {
+    layout-engine: elk
+    theme-id: 4
+  }
+}
+direction: right
+Diagram: Sentiment Analysis Architecture {
+  github: {
+    label: "GitHub Actions"
+    shape: image
+    icon: https://icons.terrastruct.com/dev%2Fgithub.svg
+  }
+
+  dockerHub: {
+    label: "DockerHub"
+    shape: image
+    icon: https://icons.terrastruct.com/dev%2Fdocker.svg
+  }
+
+  User: {
+    label: "User (Browser / Curl)"
+    shape: image
+    icon: https://icons.terrastruct.com/essentials%2F359-users.svg
+  }
+
+  terraform: {
+    label: "Terraform"
+    shape: image
+    icon: "https://static-00.iconduck.com/assets.00/terraform-icon-1803x2048-hodrzd3t.png"
+  }
+
+  azRg: {
+    label: "Azure Resource Group (aks-resource-group)"
+    shape: image
+    icon: https://icons.terrastruct.com/azure%2FGeneral%20Service%20Icons%2FResource%20Groups.svg
+  }
+
+  ingressCtrl: {
+    label: "Nginx Ingress Controller (ingress-nginx)"
+    shape: image
+    icon: https://icons.terrastruct.com/dev%2Fnginx.svg
+  }
+
+  aks: {
+    label: "Azure Kubernetes Service (mds-aks)"
+    shape: image
+    icon: "https://icons.terrastruct.com/azure%2F_Companies%2FKubernetes.svg"
+  }
+
+  ingress: {
+    label: "web-ui-ingress"
+    shape: image
+    icon: "https://raw.githubusercontent.com/kubernetes/community/8301c0f42ffb263fe95cb0e913da6dd95afd7ade/icons/svg/resources/labeled/ing.svg"
+  }
+
+  ui: {
+    label: "Web UI"
+    shape: image
+    icon: https://icons.terrastruct.com/dev%2Fjavascript.svg
+  }
+
+  proper_model: {
+    label: "DistilBERT, CoLa"
+    shape: image
+    icon: https://icons.terrastruct.com/aws%2FMachine%20Learning%2FAmazon-SageMaker_Model_light-bg.svg
+  }
+
+  proper_model_deployment: {
+    label: "Proper Model"
+    shape: image
+    icon: https://raw.githubusercontent.com/kubernetes/community/8301c0f42ffb263fe95cb0e913da6dd95afd7ade/icons/svg/resources/labeled/deploy.svg
+  }
+
+  fallback_model_deployment: {
+    label: "Fallback Model"
+    shape: image
+    icon: https://raw.githubusercontent.com/kubernetes/community/8301c0f42ffb263fe95cb0e913da6dd95afd7ade/icons/svg/resources/labeled/deploy.svg
+  }
+
+  fallback_model: {
+    label: "Naive Algorithm"
+    shape: image
+    icon: https://icons.terrastruct.com/dev%2Fpython.svg
+  }
+
+  sentimentLB: {
+    label: "sentiment-lb Service"
+    shape: image
+    icon: "https://raw.githubusercontent.com/kubernetes/community/8301c0f42ffb263fe95cb0e913da6dd95afd7ade/icons/svg/resources/labeled/svc.svg"
+  }
+
+  User -> ingress: "HTTP:80"
+  terraform -> azRg
+  azRg -> aks: "AKS (managed K8s)"
+  ingress -> ui: "/, Port 80"
+  ingress -> sentimentLB: "/predict, Port 80"
+  sentimentLB -> proper_model_deployment: "Primary, Port 8000"
+  sentimentLB -> fallback_model_deployment: "Failover, Port 8000" {
+    style: {stroke-dash: 3}
+  }
+  ingressCtrl -> ingress: "Manages routes"
+  terraform -> aks: "Creates or Skips"
+  aks -> ingress: "Load Balancer IP"
+  aks -> ingressCtrl
+  aks -> ui
+  aks -> proper_model_deployment
+  aks -> fallback_model_deployment
+  aks -> sentimentLB
+  user -> aks
+  proper_model_deployment -- proper_model
+  fallback_model_deployment -- fallback_model
+
+  DockerHub -- proper_model: "Stores Image"
+  DockerHub -- fallback_model: "Stores Image"
+}
