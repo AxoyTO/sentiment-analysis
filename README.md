@@ -1,5 +1,6 @@
 # Sentiment Analysis on AKS
 ---
+[![ci-workflow](https://github.com/AxoyTO/sentiment-analysis/actions/workflows/ci.yaml/badge.svg)](https://github.com/AxoyTO/sentiment-analysis/actions/workflows/ci.yaml)
 
 This is a simple sentiment analysis application that provides a two-model (**Proper** & **Fallback**) system deployed on **Azure Kubernetes Service (AKS)** with a web-based UI. In a high level, it features:
 - A `Proper Model`, that is a pre-trained model that provides sentiment analysis on the input text.
