@@ -172,7 +172,7 @@ jobs:
     name: Extract Ingress IP
     runs-on: ubuntu-latest
     needs:
-      - check_aks
+      - deploy_aks
     outputs:
       INGRESS_IP: ${{ steps.ingressip.outputs.INGRESS_IP }}
     steps:
