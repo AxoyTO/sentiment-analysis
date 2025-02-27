@@ -71,7 +71,7 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Check if mds-aks is Deployed
+      - name: Check if AKS is Deployed
         id: checkAks
         run: |
           set +e
