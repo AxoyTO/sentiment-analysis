@@ -290,7 +290,7 @@ jobs:
           kubectl rollout status deployment/proper-model --timeout=60s
 
   destroy_aks:
-    name: Destroy AKS with Terraform
+    name: Destroy AKS
     runs-on: ubuntu-latest
     needs:
       - test_failover
@@ -301,25 +301,17 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v4
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      - name: Login to Azure
+        uses: azure/login@v2
         with:
-          terraform_version: ${{ env.TF_VERSION }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Cache Terraform Providers
-        uses: actions/cache@v4
-        with:
-          path: |
-            aks/.terraform
-            aks/.terraform.lock.hcl
-          key: ${{ runner.os }}-terraform-${{ hashFiles('aks/.terraform.lock.hcl') }}
-          restore-keys: |
-            ${{ runner.os }}-terraform-
-
-      - name: Terraform Init (Destroy)
-        run: terraform init
-        working-directory: aks/
-
-      - name: Terraform Destroy
-        run: terraform destroy -auto-approve
-        working-directory: aks/
+      - name: Remove Resource Groups
+        run: |
+          echo "Deleting resource group 'MC_aks-resource-group_mds-aks_germanywestcentral'..."
+          az group delete --name MC_aks-resource-group_mds-aks_germanywestcentral --yes
+          echo "Deleting resource group 'aks-resource-group'..."
+          az group delete --name aks-resource-group --yes
+          echo "Resource groups deletion triggered."
