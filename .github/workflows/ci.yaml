@@ -40,23 +40,38 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
       - name: Login to DockerHub
         run: echo "${{ env.DOCKERHUB_TOKEN }}" | docker login -u "${{ env.DOCKERHUB_USERNAME }}" --password-stdin
 
       - name: Build & Push Proper Model (cors-middleware)
-        run: |
-          docker build -t ${{ env.DOCKERHUB_USERNAME }}/sentiment-analysis-proper-model:cors-middleware ./proper_model
-          docker push ${{ env.DOCKERHUB_USERNAME }}/sentiment-analysis-proper-model:cors-middleware
+        uses: docker/build-push-action@v2
+        with:
+          context: ./proper_model
+          push: true
+          tags: ${{ env.DOCKERHUB_USERNAME }}/sentiment-analysis-proper-model:cors-middleware
+          cache-from: type=gha,scope=proper-model
+          cache-to: type=gha,scope=proper-model,mode=max
 
       - name: Build & Push Fallback Model (cors-middleware)
-        run: |
-          docker build -t ${{ env.DOCKERHUB_USERNAME }}/sentiment-analysis-fallback-model:cors-middleware ./fallback_model
-          docker push ${{ env.DOCKERHUB_USERNAME }}/sentiment-analysis-fallback-model:cors-middleware
+        uses: docker/build-push-action@v2
+        with:
+          context: ./fallback_model
+          push: true
+          tags: ${{ env.DOCKERHUB_USERNAME }}/sentiment-analysis-fallback-model:cors-middleware
+          cache-from: type=gha,scope=fallback-model
+          cache-to: type=gha,scope=fallback-model,mode=max
 
       - name: Build & Push Web-UI (nginx)
-        run: |
-          docker build -t ${{ env.DOCKERHUB_USERNAME }}/sentiment-web-ui:nginx ./web-ui
-          docker push ${{ env.DOCKERHUB_USERNAME }}/sentiment-web-ui:nginx
+        uses: docker/build-push-action@v2
+        with:
+          context: ./web-ui
+          push: true
+          tags: ${{ env.DOCKERHUB_USERNAME }}/sentiment-web-ui:nginx
+          cache-from: type=gha,scope=web-ui
+          cache-to: type=gha,scope=web-ui,mode=max
 
   check_aks:
     name: Check if AKS Already Exists
