@@ -60,9 +60,9 @@ output "kube_config" {
 } */
 
 output "load_balancer_hostname" {
-  value = kubernetes_ingress.web-ui-ingress.status.0.load_balancer.0.ingress.0.hostname
+  value = kubernetes_ingress_v1.web-ui-ingress.status.0.load_balancer.0.ingress.0.hostname
 }
 
 output "load_balancer_ip" {
-  value = kubernetes_ingress.web-ui-ingress.status.0.load_balancer.0.ingress.0.ip
+  value = kubernetes_ingress_v1.web-ui-ingress.status.0.load_balancer.0.ingress.0.ip
 }
