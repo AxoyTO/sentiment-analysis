@@ -38,16 +38,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
 
       - name: Login to DockerHub
         run: echo "${{ env.DOCKERHUB_TOKEN }}" | docker login -u "${{ env.DOCKERHUB_USERNAME }}" --password-stdin
 
       - name: Build & Push Proper Model (cors-middleware)
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v6
         with:
           context: ./proper_model
           push: true
@@ -56,7 +56,7 @@ jobs:
           cache-to: type=gha,scope=proper-model,mode=max
 
       - name: Build & Push Fallback Model (cors-middleware)
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v6
         with:
           context: ./fallback_model
           push: true
@@ -65,7 +65,7 @@ jobs:
           cache-to: type=gha,scope=fallback-model,mode=max
 
       - name: Build & Push Web-UI (nginx)
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v6
         with:
           context: ./web-ui
           push: true
@@ -114,10 +114,10 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
+        uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
           # cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
@@ -177,7 +177,7 @@ jobs:
       INGRESS_IP: ${{ steps.ingressip.outputs.INGRESS_IP }}
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Login to Azure
         uses: azure/login@v2
@@ -292,12 +292,26 @@ jobs:
       - test_proper_model
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
+        uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Cache Terraform Providers
+        uses: actions/cache@v4
+        with:
+          path: |
+            aks/.terraform
+            aks/.terraform.lock.hcl
+          key: ${{ runner.os }}-terraform-${{ hashFiles('aks/.terraform.lock.hcl') }}
+          restore-keys: |
+            ${{ runner.os }}-terraform-
+
+      - name: Terraform Init (Destroy)
+        run: terraform init
+        working-directory: aks/
 
       - name: Terraform Destroy
         run: terraform destroy -auto-approve
