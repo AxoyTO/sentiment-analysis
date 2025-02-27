@@ -61,6 +61,8 @@ jobs:
   check_aks:
     name: Check if AKS Already Exists
     runs-on: ubuntu-latest
+    outputs:
+      aks_found: ${{ steps.checkAks.outputs.aks_found }}
     steps:
       - name: Azure Login
         uses: azure/login@v2
@@ -69,17 +71,15 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Check if AKS is Deployed
+      - name: Check if mds-aks is Deployed
         id: checkAks
         run: |
           set +e
           az aks show --resource-group aks-resource-group --name mds-aks 2>&1
           if [ $? -eq 0 ]; then
-            echo "AKS found. Setting aks_found to 'true'..."
-            echo "::set-output name=aks_found::true"
+            echo "aks_found=true" >> $GITHUB_OUTPUT
           else
-            echo "AKS not found. Setting aks_found to 'false'..."
-            echo "::set-output name=aks_found::false"
+            echo "aks_found=false" >> $GITHUB_OUTPUT
           fi
           set -e
 
@@ -158,6 +158,8 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - check_aks
+    outputs:
+      INGRESS_IP: ${{ steps.ingressip.outputs.INGRESS_IP }}
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v3
@@ -172,15 +174,34 @@ jobs:
       - name: Get AKS Credentials
         run: az aks get-credentials --resource-group aks-resource-group --name mds-aks --overwrite-existing
 
+      - name: Wait for Ingress to have an address
+        run: |
+          MAX_WAIT=120
+          COUNTER=0
+          INGRESS_NAME="web-ui-ingress"
+          NAMESPACE="default"
+
+          echo "Waiting up to $MAX_WAIT seconds for Ingress '$INGRESS_NAME' to get an address..."
+
+          while [[ $COUNTER -lt $MAX_WAIT ]]; do
+            ADDRESS=$(kubectl get ingress $INGRESS_NAME -n $NAMESPACE -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
+
+            if [[ -n "$ADDRESS" ]]; then
+              echo "Ingress has an address: $ADDRESS"
+              exit 0
+            fi
+
+            sleep 1
+            ((COUNTER++))
+          done
+
+          echo "ERROR: Ingress never got an address within $MAX_WAIT seconds"
+          exit 1
+
       - name: Extract Ingress IP
         id: ingressip
         run: |
-          # Wait for ingress to be ready
-          kubectl wait --namespace default \
-            --for=condition=Ready ingress/web-ui-ingress \
-            --timeout=120s
 
-          # Extract IP from ingress
           IP=$(kubectl get ingress web-ui-ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
           echo "INGRESS_IP=$IP" >> $GITHUB_ENV
 
@@ -208,7 +229,7 @@ jobs:
           curl -X POST \
             -H "Content-Type: application/json" \
             -d '{"text":"I love this product!"}' \
-            -v http://${{ env.INGRESS_IP }}/predict
+            -v http://${{ needs.test_ingress.outputs.INGRESS_IP }}/predict
 
   test_failover:
     name: Simulate Failover to Fallback
@@ -236,7 +257,7 @@ jobs:
           curl -X POST \
             -H "Content-Type: application/json" \
             -d '{"text":"Now we test fallback!"}' \
-            -v http://${{ env.INGRESS_IP }}/predict
+            -v http://${{ needs.test_ingress.outputs.INGRESS_IP }}/predict
 
       - name: Scale Up Proper Model
         run: |
