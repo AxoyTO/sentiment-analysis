@@ -24,6 +24,7 @@ env:
   AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
   AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
   AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
   DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
@@ -32,9 +33,82 @@ permissions:
   contents: read
 
 jobs:
+  build_docker_images:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Login to DockerHub
+        run: echo "${{ env.DOCKERHUB_TOKEN }}" | docker login -u "${{ env.DOCKERHUB_USERNAME }}" --password-stdin
+
+      - name: Build Proper Model (cors-middleware)
+        run: |
+          docker build -t ${{ env.DOCKERHUB_USERNAME }}/sentiment-analysis-proper-model:cors-middleware ./proper_model
+
+      - name: Build Fallback Model (cors-middleware)
+        run: |
+          docker build -t ${{ env.DOCKERHUB_USERNAME }}/sentiment-analysis-fallback-model:cors-middleware ./fallback_model
+
+      - name: Build Web-UI (nginx)
+        run: |
+          docker build -t ${{ env.DOCKERHUB_USERNAME }}/sentiment-web-ui:nginx ./web-ui
+
+  push_docker_images:
+    name: Push Docker Images
+    needs: build_docker_images
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Login to DockerHub
+        run: echo "${{ env.DOCKERHUB_TOKEN }}" | docker login -u "${{ env.DOCKERHUB_USERNAME }}" --password-stdin
+
+      - name: Push Proper Model (cors-middleware)
+        run: |
+          docker push ${{ env.DOCKERHUB_USERNAME }}/sentiment-analysis-proper-model:cors-middleware
+
+      - name: Push Fallback Model (cors-middleware)
+        run: |
+          docker push ${{ env.DOCKERHUB_USERNAME }}/sentiment-analysis-fallback-model:cors-middleware
+
+      - name: Push Web-UI (nginx)
+        run: |
+          docker push ${{ env.DOCKERHUB_USERNAME }}/sentiment-web-ui:nginx
+
+  check_aks:
+    name: Check if AKS Already Exists
+    runs-on: ubuntu-latest
+    steps:
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Check if AKS is Deployed
+        id: checkAks
+        run: |
+          set +e
+          az aks show --resource-group aks-resource-group --name sentiment-aks
+          if [ $? -eq 0 ]; then
+            echo "AKS found. Setting aks_found=1..."
+            echo "aks_found=1" >> $GITHUB_ENV
+          else
+            echo "AKS not found. Setting aks_found=0..."
+            echo "aks_found=0" >> $GITHUB_ENV
+          fi
+          set -e
+
   deploy_aks:
     name: Deploy AKS with Terraform
     runs-on: ubuntu-latest
+    needs:
+      - push_docker_images
+      - check_aks
     steps:
       - name: Azure Login
         uses: azure/login@v2
@@ -63,6 +137,7 @@ jobs:
             ${{ runner.os }}-terraform-
 
       - name: Terraform Init
+        if: env.aks_found == '0'
         run: terraform init
         working-directory: aks/
 
@@ -71,15 +146,18 @@ jobs:
         working-directory: aks/
 
       - name: Terraform Validate
+        if: env.aks_found == '0'
         run: terraform validate
         working-directory: aks/
 
       - name: Terraform Plan
+        if: env.aks_found == '0'
         run: terraform plan -out=tfplan
         working-directory: aks/
 
       - name: Terraform Apply
         id: terraformApply
+        if: env.aks_found == '0'
         run: terraform apply tfplan
         working-directory: aks/
 
@@ -87,6 +165,10 @@ jobs:
         if: failure() && steps.terraformApply.outcome == 'failure'
         run: terraform destroy -auto-approve
         working-directory: aks/
+
+      - name: Terraform Not Needed
+        if: env.aks_found == '1'
+        run: echo "AKS already exists, skipping Terraform steps."
 
       - name: Upload Terraform Artifacts
         uses: actions/upload-artifact@v4
@@ -111,7 +193,7 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Get AKS Credentials
-        run: az aks get-credentials --resource-group aks-resource-group --name sentiment-aks --overwrite-existing
+        run: az aks get-credentials --resource-group aks-resource-group --name mds-aks --overwrite-existing
 
       - name: Extract Ingress IP
         id: ingressip
@@ -164,7 +246,7 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Get AKS Credentials
-        run: az aks get-credentials --resource-group aks-resource-group --name sentiment-aks --overwrite-existing
+        run: az aks get-credentials --resource-group aks-resource-group --name mds-aks --overwrite-existing
 
       - name: Scale Down Proper Model
         run: |
