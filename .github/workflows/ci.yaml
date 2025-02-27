@@ -172,7 +172,9 @@ jobs:
     name: Extract Ingress IP
     runs-on: ubuntu-latest
     needs:
+      - check_aks
       - deploy_aks
+    if: always()
     outputs:
       INGRESS_IP: ${{ steps.ingressip.outputs.INGRESS_IP }}
     steps:
@@ -290,6 +292,8 @@ jobs:
     needs:
       - test_failover
       - test_proper_model
+      - deploy_aks
+    if: needs.deploy_aks.result == 'success'
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
