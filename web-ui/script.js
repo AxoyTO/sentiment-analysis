@@ -1,4 +1,3 @@
-// 🌎 Dynamically determine the API endpoint
 const API_URL = determineAPIURL();
 
 function determineAPIURL() {
