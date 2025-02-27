@@ -227,6 +227,7 @@ jobs:
     name: Test Ingress (Root & /predict)
     runs-on: ubuntu-latest
     needs: get_ingress_ip
+    if: always()
     steps:
       - name: Echo Ingress IP
         run: echo "Ingress IP is $INGRESS_IP"
@@ -242,6 +243,7 @@ jobs:
     needs:
       - test_ingress
       - get_ingress_ip
+    if: always()
     steps:
       - name: Test Predict Endpoint (Proper Model)
         run: |
@@ -257,6 +259,7 @@ jobs:
     needs:
       - test_ingress
       - get_ingress_ip
+    if: always()
     steps:
       - name: Login to Azure
         uses: azure/login@v2
