@@ -73,7 +73,7 @@ jobs:
         id: checkAks
         run: |
           set +e
-          az aks show --resource-group aks-resource-group --name sentiment-aks 2>&1
+          az aks show --resource-group aks-resource-group --name mds-aks 2>&1
           if [ $? -eq 0 ]; then
             echo "AKS found. Setting aks_found to 'true'..."
             echo "::set-output name=aks_found::true"
