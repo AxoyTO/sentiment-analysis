@@ -216,9 +216,10 @@ jobs:
       - name: Extract Ingress IP
         id: ingressip
         run: |
-
-          IP=$(kubectl get ingress web-ui-ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-          echo "INGRESS_IP=$IP" >> $GITHUB_ENV
+          IP=$(kubectl get ingress web-ui-ingress -n default -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          echo "Detected IP: $IP"
+          echo "INGRESS_IP=$IP" >> $GITHUB_OUTPUT
+        shell: bash
 
   test_ingress:
     name: Test Ingress (Root & /predict)
@@ -236,7 +237,9 @@ jobs:
   test_proper_model:
     name: Test Proper Model
     runs-on: ubuntu-latest
-    needs: [test_ingress]
+    needs:
+      - test_ingress
+      - get_ingress_ip
     steps:
       - name: Test Predict Endpoint (Proper Model)
         run: |
@@ -244,12 +247,14 @@ jobs:
           curl -X POST \
             -H "Content-Type: application/json" \
             -d '{"text":"I love this product!"}' \
-            -v http://${{ needs.test_ingress.outputs.INGRESS_IP }}/predict
+            -v http://${{ needs.get_ingress_ip.outputs.INGRESS_IP }}/predict
 
   test_failover:
     name: Simulate Failover to Fallback
     runs-on: ubuntu-latest
-    needs: [test_ingress]
+    needs:
+      - test_ingress
+      - get_ingress_ip
     steps:
       - name: Login to Azure
         uses: azure/login@v2
@@ -272,7 +277,7 @@ jobs:
           curl -X POST \
             -H "Content-Type: application/json" \
             -d '{"text":"Now we test fallback!"}' \
-            -v http://${{ needs.test_ingress.outputs.INGRESS_IP }}/predict
+            -v http://${{ needs.get_ingress_ip.outputs.INGRESS_IP }}/predict
 
       - name: Scale Up Proper Model
         run: |
@@ -282,7 +287,9 @@ jobs:
   destroy_aks:
     name: Destroy AKS with Terraform
     runs-on: ubuntu-latest
-    needs: [test_failover]
+    needs:
+      - test_failover
+      - test_proper_model
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v3
