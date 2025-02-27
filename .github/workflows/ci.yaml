@@ -33,7 +33,7 @@ permissions:
   contents: read
 
 jobs:
-  build_docker_images:
+  build_and_push_docker_images:
     name: Build Docker Images
     runs-on: ubuntu-latest
     steps:
@@ -43,39 +43,19 @@ jobs:
       - name: Login to DockerHub
         run: echo "${{ env.DOCKERHUB_TOKEN }}" | docker login -u "${{ env.DOCKERHUB_USERNAME }}" --password-stdin
 
-      - name: Build Proper Model (cors-middleware)
+      - name: Build & Push Proper Model (cors-middleware)
         run: |
           docker build -t ${{ env.DOCKERHUB_USERNAME }}/sentiment-analysis-proper-model:cors-middleware ./proper_model
-
-      - name: Build Fallback Model (cors-middleware)
-        run: |
-          docker build -t ${{ env.DOCKERHUB_USERNAME }}/sentiment-analysis-fallback-model:cors-middleware ./fallback_model
-
-      - name: Build Web-UI (nginx)
-        run: |
-          docker build -t ${{ env.DOCKERHUB_USERNAME }}/sentiment-web-ui:nginx ./web-ui
-
-  push_docker_images:
-    name: Push Docker Images
-    needs: build_docker_images
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
-
-      - name: Login to DockerHub
-        run: echo "${{ env.DOCKERHUB_TOKEN }}" | docker login -u "${{ env.DOCKERHUB_USERNAME }}" --password-stdin
-
-      - name: Push Proper Model (cors-middleware)
-        run: |
           docker push ${{ env.DOCKERHUB_USERNAME }}/sentiment-analysis-proper-model:cors-middleware
 
-      - name: Push Fallback Model (cors-middleware)
+      - name: Build & Push Fallback Model (cors-middleware)
         run: |
+          docker build -t ${{ env.DOCKERHUB_USERNAME }}/sentiment-analysis-fallback-model:cors-middleware ./fallback_model
           docker push ${{ env.DOCKERHUB_USERNAME }}/sentiment-analysis-fallback-model:cors-middleware
 
-      - name: Push Web-UI (nginx)
+      - name: Build & Push Web-UI (nginx)
         run: |
+          docker build -t ${{ env.DOCKERHUB_USERNAME }}/sentiment-web-ui:nginx ./web-ui
           docker push ${{ env.DOCKERHUB_USERNAME }}/sentiment-web-ui:nginx
 
   check_aks:
@@ -107,7 +87,7 @@ jobs:
     name: Deploy AKS with Terraform
     runs-on: ubuntu-latest
     needs:
-      - push_docker_images
+      - build_and_push_docker_images
       - check_aks
     steps:
       - name: Azure Login
