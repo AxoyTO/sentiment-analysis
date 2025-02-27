@@ -73,13 +73,13 @@ jobs:
         id: checkAks
         run: |
           set +e
-          az aks show --resource-group aks-resource-group --name mds-aks
+          az aks show --resource-group aks-resource-group --name sentiment-aks 2>&1
           if [ $? -eq 0 ]; then
-            echo "AKS found. Setting aks_found=1..."
-            echo "aks_found=1" >> $GITHUB_ENV
+            echo "AKS found. Setting aks_found to 'true'..."
+            echo "::set-output name=aks_found::true"
           else
-            echo "AKS not found. Setting aks_found=0..."
-            echo "aks_found=0" >> $GITHUB_ENV
+            echo "AKS not found. Setting aks_found to 'false'..."
+            echo "::set-output name=aks_found::false"
           fi
           set -e
 
@@ -89,6 +89,7 @@ jobs:
     needs:
       - build_and_push_docker_images
       - check_aks
+    if: needs.check_aks.outputs.aks_found == 'false'
     steps:
       - name: Azure Login
         uses: azure/login@v2
