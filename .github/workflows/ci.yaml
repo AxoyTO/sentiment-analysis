@@ -93,7 +93,7 @@ jobs:
         id: checkAks
         run: |
           set +e
-          az aks show --resource-group aks-resource-group --name sentiment-aks
+          az aks show --resource-group aks-resource-group --name mds-aks
           if [ $? -eq 0 ]; then
             echo "AKS found. Setting aks_found=1..."
             echo "aks_found=1" >> $GITHUB_ENV
